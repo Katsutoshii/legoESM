@@ -333,6 +333,49 @@ class TestXLAFlags:
                         f"`os.cpu_count()`."
                     )
 
+    def test_tpu_backend_does_not_set_removed_tpu_xla_flags(self):
+        """Cloud TPU v6e / JAX 0.10 / libtpu 0.0.41 regression: the legacy
+        TPU XLA flags (``xla_tpu_enable_async_collective_fusion``,
+        ``xla_tpu_enable_data_parallel_all_reduce_opt``,
+        ``xla_tpu_enable_latency_hiding_scheduler``) were removed from XLA
+        and cause ``LOG(FATAL) parse_flags_from_env.cc: Unknown flags in
+        XLA_FLAGS`` on first TPU compilation.
+        """
+        from tests.legoesm_paths import legoesm_source_path
+
+        removed = (
+            "xla_tpu_enable_async_collective_fusion",
+            "xla_tpu_enable_data_parallel_all_reduce_opt",
+            "xla_tpu_enable_latency_hiding_scheduler",
+        )
+        assert TPU_XLA_FLAGS == {}
+
+        def _find_violations(src: str) -> list[tuple[int, str]]:
+            docstring_lines = _docstring_line_numbers(src)
+            hits: list[tuple[int, str]] = []
+            for lineno, line in enumerate(src.splitlines(), 1):
+                if lineno in docstring_lines:
+                    continue
+                code_part = line.split("#", 1)[0]
+                for flag in removed:
+                    if flag in code_part:
+                        hits.append((lineno, flag))
+            return hits
+
+        # Planted violation control: confirm the scanner fires when a removed
+        # flag is emitted in executable source.
+        assert _find_violations(
+            'TPU_XLA_FLAGS = {"xla_tpu_enable_async_collective_fusion": "true"}\n'
+        ) == [(1, "xla_tpu_enable_async_collective_fusion")]
+
+        for rel_path in ("runtime/backend.py", "parallel/device_config.py"):
+            src = legoesm_source_path(rel_path).read_text()
+            hits = _find_violations(src)
+            assert not hits, (
+                f"{rel_path} reintroduced removed TPU XLA flag(s) {hits} "
+                f"that crash JAX 0.10 / libtpu 0.0.41 at PJRT init."
+            )
+
     def test_configure_tpu_multihost_does_not_crash_on_jax_0_9(self, monkeypatch):
         """Iter-149/150 regression: the canonical TPU bootstrap must NOT
         call `jax.config.update("jax_spmd_mode", "allow_all")`.

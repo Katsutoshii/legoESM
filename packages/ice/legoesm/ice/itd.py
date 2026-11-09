@@ -579,14 +579,20 @@ def _lipscomb_column_kernel(
     G1_k = G1[None, :]
     anchor_k = anchor_h[None, :]
 
-    int_area = (
-        G0_k * overlap_w
-        + G1_k * ((b_over - anchor_k) ** 2 - (a_over - anchor_k) ** 2) / 2.0
-    )
+    # Evaluate the linear ITD g(h) = G0 + G1*(h - anchor) at the overlap
+    # endpoints [a_over, b_over].  Integrating via (g_a, g_b) * overlap_w
+    # avoids expanding (b_over**2 - a_over**2) and (b_over**3 - a_over**3)
+    # around h = 0, which suffers O(1e-7) catastrophic cancellation in float32
+    # on near-empty overlaps while int_area is O(1e-12), inflating V_remap / a_safe
+    # to ~1e5 m under the 1e-30 threshold below.
+    g_a = G0_k + G1_k * (a_over - anchor_k)
+    g_b = G0_k + G1_k * (b_over - anchor_k)
+    int_area = 0.5 * overlap_w * (g_a + g_b)
     int_area = jnp.where(overlap_w > 0.0, jnp.maximum(int_area, 0.0), 0.0)
     int_vol = (
-        (G0_k - G1_k * anchor_k) * (b_over ** 2 - a_over ** 2) / 2.0
-        + G1_k * (b_over ** 3 - a_over ** 3) / 3.0
+        overlap_w
+        * (g_a * (2.0 * a_over + b_over) + g_b * (a_over + 2.0 * b_over))
+        / 6.0
     )
     int_vol = jnp.where(overlap_w > 0.0, jnp.maximum(int_vol, 0.0), 0.0)
 

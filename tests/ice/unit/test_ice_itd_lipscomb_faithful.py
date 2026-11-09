@@ -402,3 +402,18 @@ def test_lipscomb_remap_grad_finite_x64_and_float32():
     category_bounds.cache_clear()
     jax.config.update("jax_enable_x64", False)
     _check(jnp.float32)   # autouse fixture clears the cache + restores x64 afterwards
+
+
+def test_lipscomb_float32_no_catastrophic_thickness_spike():
+    """In float32, near-empty adjacent overlap intervals must keep h_remap
+    bounded within the physical category bounds rather than inflating
+    V_remap / a_safe to O(1e5 m) via (b^2 - a^2) / (b^3 - a^3) cancellation."""
+    category_bounds.cache_clear()
+    jax.config.update("jax_enable_x64", False)
+    ho = jnp.asarray([[0.25, 0.95, 1.85, 3.10, 5.20]], dtype=jnp.float32)
+    hn = jnp.asarray([[0.250002, 0.950002, 1.850002, 3.100002, 5.200002]], dtype=jnp.float32)
+    a = jnp.asarray([[0.0, 0.0, 0.35, 0.25, 0.0]], dtype=jnp.float32)
+    r = lipscomb_2001_remap(ho, a, hn, a, _N, _DT)
+    assert r["h"].dtype == jnp.float32
+    assert bool(jnp.all(jnp.isfinite(r["h"])))
+    assert float(jnp.max(r["h"])) < 10.0

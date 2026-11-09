@@ -97,11 +97,15 @@ def require_x64(component: str) -> None:
 # XLA flag helpers (from parallel.device_config)
 # ---------------------------------------------------------------------------
 
-TPU_XLA_FLAGS = {
-    "xla_tpu_enable_async_collective_fusion": "true",
-    "xla_tpu_enable_data_parallel_all_reduce_opt": "true",
-    "xla_tpu_enable_latency_hiding_scheduler": "LHS_DEFAULT",
-}
+# NOTE: the legacy TPU XLA flags (``xla_tpu_enable_async_collective_fusion``,
+# ``xla_tpu_enable_data_parallel_all_reduce_opt``, and
+# ``xla_tpu_enable_latency_hiding_scheduler``) were REMOVED in current XLA /
+# libtpu (JAX 0.10 / libtpu 0.0.41).  Leaving them in ``XLA_FLAGS`` aborts PJRT
+# on first TPU compilation with ``LOG(FATAL) parse_flags_from_env.cc: Unknown
+# flags in XLA_FLAGS`` (the TPU counterpart of the removed ``xla_gpu_enable_*``
+# flags noted below).  Keep the dict symbol exported and empty for backwards
+# compatibility; current libtpu enables latency-hiding scheduling by default.
+TPU_XLA_FLAGS: dict[str, str] = {}
 
 NVIDIA_GPU_XLA_FLAGS = {
     "xla_gpu_cudnn_gemm_fusion_level": "3",

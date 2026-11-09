@@ -1150,6 +1150,7 @@ def _build_segment_benchmark(
         held_sw_down_toa=ctx["held_sw_down_toa"],
         step_index=0,
         target_mass=_target_mass,
+        ice_T_skin=ctx.get("ice_T_skin"),
     )
 
     # Pack forcing (constant during benchmark)

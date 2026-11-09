@@ -902,7 +902,13 @@ def cmd_benchmark(args):
 
     import jax
     from legoesm.grids.cubed_sphere import create_cubed_sphere
-    from legoesm.atmosphere.dynamics.gcm.shallow_water_fv3_cdgrid import CDGridShallowWaterModel as ShallowWaterModel
+    from legoesm.core.operators_cdgrid import center_to_dgrid_vector
+    from legoesm.atmosphere.dynamics.gcm.shallow_water_fv3_cdgrid import (
+        CDGridShallowWaterModel as ShallowWaterModel,
+        CDGridShallowWaterState,
+        create_cubed_sphere_cdgrid,
+        williamson_cli_calibration,
+    )
     from tests.test_cases.williamson import williamson_test2
 
     logger.info(f"legoESM v{__version__} | Benchmark")
@@ -912,8 +918,16 @@ def cmd_benchmark(args):
     logger.info(f"  Devices: {jax.devices()}")
 
     grid = create_cubed_sphere(args.resolution)
-    model = ShallowWaterModel(grid)
-    state = williamson_test2(grid)
+    cdgrid = create_cubed_sphere_cdgrid(grid)
+    config = williamson_cli_calibration(int(args.resolution))
+    model = ShallowWaterModel(grid, config)
+    sw_state = williamson_test2(grid)
+    u_cc = sw_state.u.data if hasattr(sw_state.u, "data") else sw_state.u
+    v_cc = sw_state.v.data if hasattr(sw_state.v, "data") else sw_state.v
+    h = sw_state.h.data if hasattr(sw_state.h, "data") else sw_state.h
+    h_s = sw_state.h_s.data if hasattr(sw_state.h_s, "data") else sw_state.h_s
+    u_d, v_d = center_to_dgrid_vector(u_cc, v_cc, cdgrid)
+    state = CDGridShallowWaterState(h=h, u_d=u_d, v_d=v_d, h_s=h_s)
 
     # Multi-GPU sharding
     if args.multi_gpu:
@@ -928,7 +942,7 @@ def cmd_benchmark(args):
     logger.info("Warmup (JIT compilation)...")
     state_warm = model.step(state, args.dt)
     # Force evaluation
-    jax.block_until_ready(state_warm.h.data)
+    jax.block_until_ready(state_warm.h)
     logger.info("done.")
 
     # Timed run
@@ -936,7 +950,7 @@ def cmd_benchmark(args):
     t_start = time.time()
     for i in range(args.n_steps):
         state = model.step(state, args.dt)
-    jax.block_until_ready(state.h.data)
+    jax.block_until_ready(state.h)
     wall_time = time.time() - t_start
 
     throughput = args.n_steps / wall_time

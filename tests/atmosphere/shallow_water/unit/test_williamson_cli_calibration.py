@@ -219,3 +219,24 @@ class TestCliUsesHelper:
             williamson_cli_calibration as imported,
         )
         assert imported is m.williamson_cli_calibration
+
+    def test_cmd_benchmark_runs_end_to_end(self):
+        # Regression: cmd_benchmark previously passed cell-centred
+        # williamson_test2(grid) directly into CDGridShallowWaterModel.step()
+        # without center_to_dgrid_vector conversion, crashing with shape
+        # mismatch (6, n, n-1) vs (6, n+1, n).
+        import types
+        import jax
+        from legoesm.cli import cmd_benchmark
+        from legoesm.core.precision import get_policy, set_policy
+
+        old_x64 = jax.config.jax_enable_x64
+        old_policy = get_policy()
+        try:
+            args = types.SimpleNamespace(
+                resolution=12, n_steps=2, dt=600.0, multi_gpu=False,
+            )
+            cmd_benchmark(args)
+        finally:
+            jax.config.update("jax_enable_x64", old_x64)
+            set_policy(old_policy)

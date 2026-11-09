@@ -258,7 +258,8 @@ def _compute_halo_interp_offsets_ed_hN(n: int, halo: int) -> jnp.ndarray:
                         frac = (n - 1) - frac
                     offsets[face, edge_idx, depth, j] = frac - j
 
-    return jnp.array(offsets, dtype=jnp.float64)
+    _dtype = jnp.float64 if jax.config.jax_enable_x64 else jnp.float32
+    return jnp.array(offsets, dtype=_dtype)
 
 
 def compute_halo_interp_offsets_ed(n: int) -> jnp.ndarray:
@@ -372,7 +373,8 @@ def _compute_halo_interp_offsets_hN(n: int, halo: int) -> jnp.ndarray:
 
                     offsets[face, edge_idx, depth, j] = frac - j
 
-    return jnp.array(offsets, dtype=jnp.float64)
+    _dtype = jnp.float64 if jax.config.jax_enable_x64 else jnp.float32
+    return jnp.array(offsets, dtype=_dtype)
 
 
 def interp_strip(strip: jax.Array, offsets_1d: jax.Array) -> jax.Array:
